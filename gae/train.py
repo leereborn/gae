@@ -14,10 +14,10 @@ import scipy.sparse as sp
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import average_precision_score
 
-from gae.optimizer import OptimizerAE, OptimizerVAE
-from gae.input_data import load_data
-from gae.model import GCNModelAE, GCNModelVAE
-from gae.preprocessing import preprocess_graph, construct_feed_dict, sparse_to_tuple, mask_test_edges
+from optimizer import OptimizerAE, OptimizerVAE
+from input_data import load_data
+from model import GCNModelAE, GCNModelVAE
+from preprocessing import preprocess_graph, construct_feed_dict, sparse_to_tuple, mask_test_edges
 
 # Settings
 flags = tf.app.flags
