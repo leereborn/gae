@@ -82,6 +82,30 @@ class GraphConvolution(Layer):
         outputs = self.act(x)
         return outputs
 
+class AttentiveGraphConvolution(Layer):
+    def __init__(self, input_dim, output_dim, adj, dropout=0., act=tf.nn.relu, **kwargs):
+        super(AttentiveGraphConvolution, self).__init__(**kwargs)
+        with tf.variable_scope(self.name + '_vars'):
+            self.vars['weights'] = weight_variable_glorot(input_dim, output_dim, name="weights") # Why not use tf official glorot init?
+            self.vars['attn_weights'] = weight_variable_glorot(output_dim, 1, name="attn_weights")
+        self.dropout = dropout
+        self.adj = adj
+        self.act = act
+
+    def _call(self, inputs):
+        x = inputs
+        x = tf.nn.dropout(x, 1-self.dropout)
+        x = tf.matmul(x, self.vars['weights'])
+        # attention
+        attn = tf.matmul(x, self.vars['attn_weights'])
+        attn_coef = attn + tf.transpose(attn) # ?
+        attn_coef = tf.nn.leaky_relu(attn_coef)
+        mask = -10e9 * (1.0 - self.adj)
+        attn_coef += mask
+
+        x = tf.matmul(attn_coef, x)
+        outputs = self.act(x)
+        return outputs
 
 class GraphConvolutionSparse(Layer):
     """Graph convolution layer for sparse inputs."""
@@ -103,6 +127,25 @@ class GraphConvolutionSparse(Layer):
         outputs = self.act(x)
         return outputs
 
+class AttentiveGraphConvolutionSparse(Layer):
+    def __init__(self, input_dim, output_dim, adj, features_nonzero, dropout=0., act=tf.nn.relu, **kwargs):
+        super(GraphConvolutionSparse, self).__init__(**kwargs)
+        with tf.variable_scope(self.name + '_vars'):
+            self.vars['weights'] = weight_variable_glorot(input_dim, output_dim, name="weights")
+            self.vars['attn_weights'] = weight_variable_glorot(output_dim, 1, name="attn_weights")
+        self.dropout = dropout
+        self.adj = adj
+        self.act = act
+        self.issparse = True # What is the purpose?
+        self.features_nonzero = features_nonzero
+
+    def _call(self, inputs):
+        x = inputs
+        x = dropout_sparse(x, 1-self.dropout, self.features_nonzero)
+        x = tf.sparse_tensor_dense_matmul(x, self.vars['weights'])
+        x = tf.sparse_tensor_dense_matmul(self.adj, x)
+        outputs = self.act(x)
+        return outputs
 
 class InnerProductDecoder(Layer):
     """Decoder model layer for link prediction."""
