@@ -100,7 +100,8 @@ class AttentiveGraphConvolution(Layer):
         attn = tf.matmul(x, self.vars['attn_weights'])
         attn_coef = attn + tf.transpose(attn) # ?
         attn_coef = tf.nn.leaky_relu(attn_coef)
-        mask = -10e9 * (1.0 - self.adj)
+        dense_adj = tf.sparse.to_dense(self.adj)
+        mask = -10e9 * (1.0 - dense_adj)
         attn_coef += mask
 
         x = tf.matmul(attn_coef, x)
@@ -129,7 +130,7 @@ class GraphConvolutionSparse(Layer):
 
 class AttentiveGraphConvolutionSparse(Layer):
     def __init__(self, input_dim, output_dim, adj, features_nonzero, dropout=0., act=tf.nn.relu, **kwargs):
-        super(GraphConvolutionSparse, self).__init__(**kwargs)
+        super(AttentiveGraphConvolutionSparse, self).__init__(**kwargs)
         with tf.variable_scope(self.name + '_vars'):
             self.vars['weights'] = weight_variable_glorot(input_dim, output_dim, name="weights")
             self.vars['attn_weights'] = weight_variable_glorot(output_dim, 1, name="attn_weights")
@@ -142,8 +143,16 @@ class AttentiveGraphConvolutionSparse(Layer):
     def _call(self, inputs):
         x = inputs
         x = dropout_sparse(x, 1-self.dropout, self.features_nonzero)
-        x = tf.sparse_tensor_dense_matmul(x, self.vars['weights'])
-        x = tf.sparse_tensor_dense_matmul(self.adj, x)
+        x = tf.sparse_tensor_dense_matmul(x, self.vars['weights']) # returns a dense matrix
+        # attention
+        attn = tf.matmul(x, self.vars['attn_weights'])
+        attn_coef = attn + tf.transpose(attn) # ?
+        attn_coef = tf.nn.leaky_relu(attn_coef)
+        dense_adj = tf.sparse.to_dense(self.adj)
+        mask = -10e9 * (1.0 - dense_adj)
+        attn_coef += mask
+
+        x = tf.matmul(attn_coef, x)
         outputs = self.act(x)
         return outputs
 

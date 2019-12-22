@@ -32,6 +32,7 @@ flags.DEFINE_float('dropout', 0., 'Dropout rate (1 - keep probability).')
 flags.DEFINE_string('model', 'gcn_ae', 'Model string.')
 flags.DEFINE_string('dataset', 'cora', 'Dataset string.')
 flags.DEFINE_integer('features', 1, 'Whether to use features (1) or not (0).')
+flags.DEFINE_bool('attention',True, 'Whther to use attention.')
 
 model_str = FLAGS.model
 dataset_str = FLAGS.dataset
@@ -51,7 +52,10 @@ if FLAGS.features == 0:
     features = sp.identity(features.shape[0])  # featureless
 
 # Some preprocessing
-adj_norm = preprocess_graph(adj)
+if FLAGS.attention:
+    adj_norm = adj
+else:
+    adj_norm = preprocess_graph(adj)
 
 # Define placeholders
 placeholders = {
@@ -70,9 +74,9 @@ features_nonzero = features[1].shape[0]
 # Create model
 model = None
 if model_str == 'gcn_ae':
-    model = GCNModelAE(placeholders, num_features, features_nonzero)
+    model = GCNModelAE(placeholders, num_features, features_nonzero, FLAGS.attention)
 elif model_str == 'gcn_vae':
-    model = GCNModelVAE(placeholders, num_features, num_nodes, features_nonzero)
+    model = GCNModelVAE(placeholders, num_features, num_nodes, features_nonzero, FLAGS.attention)
 
 pos_weight = float(adj.shape[0] * adj.shape[0] - adj.sum()) / adj.sum()
 norm = adj.shape[0] * adj.shape[0] / float((adj.shape[0] * adj.shape[0] - adj.sum()) * 2)
