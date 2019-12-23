@@ -35,7 +35,7 @@ flags.DEFINE_integer('features', 1, 'Whether to use features (1) or not (0).')
 flags.DEFINE_bool('attention',False, 'Whther to use attention.')
 
 model_str = FLAGS.model
-dataset_str = FLAGS.datase
+dataset_str = FLAGS.dataset
 
 # Load data
 adj, features = load_data(dataset_str)
@@ -147,7 +147,7 @@ for epoch in range(FLAGS.epochs):
 
     t = time.time()
     # Construct feed dictionary
-    feed_dict = construct_feed_dict(adj_norm, adj_label, features, placeholders)
+    feed_dict = construct_feed_dict(adj_norm, adj_label, features, placeholders) # global variable
     feed_dict.update({placeholders['dropout']: FLAGS.dropout})
     # Run single weight update
     outs = sess.run([opt.opt_op, opt.cost, opt.accuracy], feed_dict=feed_dict)
@@ -156,7 +156,7 @@ for epoch in range(FLAGS.epochs):
     avg_cost = outs[1]
     avg_accuracy = outs[2]
 
-    roc_curr, ap_curr = get_roc_score(val_edges, val_edges_false) # what does this do?
+    roc_curr, ap_curr = get_roc_score(val_edges, val_edges_false)
     val_roc_score.append(roc_curr)
 
     print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(avg_cost),
