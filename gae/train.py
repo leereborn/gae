@@ -32,10 +32,10 @@ flags.DEFINE_float('dropout', 0., 'Dropout rate (1 - keep probability).')
 flags.DEFINE_string('model', 'gcn_ae', 'Model string.')
 flags.DEFINE_string('dataset', 'cora', 'Dataset string.')
 flags.DEFINE_integer('features', 1, 'Whether to use features (1) or not (0).')
-flags.DEFINE_bool('attention',True, 'Whther to use attention.')
+flags.DEFINE_bool('attention',False, 'Whther to use attention.')
 
 model_str = FLAGS.model
-dataset_str = FLAGS.dataset
+dataset_str = FLAGS.datase
 
 # Load data
 adj, features = load_data(dataset_str)
