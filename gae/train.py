@@ -41,7 +41,7 @@ dataset_str = FLAGS.dataset
 adj, features = load_data(dataset_str)
 
 # Store original adjacency matrix (without diagonal entries) for later
-adj_orig = adj
+adj_orig = adj # hard copy?
 adj_orig = adj_orig - sp.dia_matrix((adj_orig.diagonal()[np.newaxis, :], [0]), shape=adj_orig.shape)
 adj_orig.eliminate_zeros()
 
@@ -53,7 +53,7 @@ if FLAGS.features == 0:
 
 # Some preprocessing
 if FLAGS.attention:
-    adj_norm = adj
+    adj_norm = sparse_to_tuple(adj)
 else:
     adj_norm = preprocess_graph(adj)
 
@@ -156,7 +156,7 @@ for epoch in range(FLAGS.epochs):
     avg_cost = outs[1]
     avg_accuracy = outs[2]
 
-    roc_curr, ap_curr = get_roc_score(val_edges, val_edges_false)
+    roc_curr, ap_curr = get_roc_score(val_edges, val_edges_false) # what does this do?
     val_roc_score.append(roc_curr)
 
     print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(avg_cost),
