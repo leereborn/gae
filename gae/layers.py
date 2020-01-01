@@ -87,7 +87,8 @@ class AttentiveGraphConvolution(Layer):
         super(AttentiveGraphConvolution, self).__init__(**kwargs)
         with tf.variable_scope(self.name + '_vars'):
             self.vars['weights'] = weight_variable_glorot(input_dim, output_dim, name="weights") # Why not use tf official glorot init?
-            self.vars['attn_weights'] = weight_variable_glorot(output_dim, 1, name="attn_weights")
+            #self.vars['attn_weights'] = weight_variable_glorot(output_dim, 1, name="attn_weights")
+            self.vars['attn_weights'] = tf.get_variable(name = "attn_weights", shape=(output_dim,1),initializer=tf.glorot_uniform_initializer)
         self.dropout = dropout
         self.adj = adj
         self.act = act
@@ -103,6 +104,7 @@ class AttentiveGraphConvolution(Layer):
         dense_adj = tf.sparse.to_dense(self.adj)
         mask = -10e9 * (1.0 - dense_adj)
         attn_coef += mask
+        attn_coef = tf.nn.softmax(attn_coef)
 
         x = tf.matmul(attn_coef, x)
         outputs = self.act(x)
@@ -133,7 +135,8 @@ class AttentiveGraphConvolutionSparse(Layer):
         super(AttentiveGraphConvolutionSparse, self).__init__(**kwargs)
         with tf.variable_scope(self.name + '_vars'):
             self.vars['weights'] = weight_variable_glorot(input_dim, output_dim, name="weights")
-            self.vars['attn_weights'] = weight_variable_glorot(output_dim, 1, name="attn_weights")
+            #self.vars['attn_weights'] = weight_variable_glorot(output_dim, 1, name="attn_weights")
+            self.vars['attn_weights'] = tf.get_variable(name = "attn_weights", shape=(output_dim,1),initializer=tf.glorot_uniform_initializer)
         self.dropout = dropout
         self.adj = adj
         self.act = act
@@ -148,10 +151,11 @@ class AttentiveGraphConvolutionSparse(Layer):
         attn = tf.matmul(x, self.vars['attn_weights'])
         attn_coef = attn + tf.transpose(attn) # ?
         attn_coef = tf.nn.leaky_relu(attn_coef)
-        dense_adj = tf.sparse.to_dense(self.adj)
+        dense_adj = tf.sparse.to_dense(self.adj) # why need not reorder here but in gcmc
         mask = -10e9 * (1.0 - dense_adj)
         attn_coef += mask
-
+        attn_coef = tf.nn.softmax(attn_coef)
+        
         x = tf.matmul(attn_coef, x)
         outputs = self.act(x)
         return outputs

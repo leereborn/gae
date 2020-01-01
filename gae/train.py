@@ -52,8 +52,11 @@ if FLAGS.features == 0:
     features = sp.identity(features.shape[0])  # featureless
 
 # Some preprocessing
+#adj_norm = preprocess_graph(adj)
+
 if FLAGS.attention:
-    adj_norm = sparse_to_tuple(adj)
+    adj_norm = adj + sp.eye(adj.shape[0])
+    adj_norm = sparse_to_tuple(adj_norm)
 else:
     adj_norm = preprocess_graph(adj)
 
@@ -158,7 +161,7 @@ for epoch in range(FLAGS.epochs):
 
     roc_curr, ap_curr = get_roc_score(val_edges, val_edges_false)
     val_roc_score.append(roc_curr)
-
+    
     print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(avg_cost),
           "train_acc=", "{:.5f}".format(avg_accuracy), "val_roc=", "{:.5f}".format(val_roc_score[-1]),
           "val_ap=", "{:.5f}".format(ap_curr),
