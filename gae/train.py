@@ -5,7 +5,7 @@ import time
 import os
 
 # Train on CPU (hide GPU) due to memory constraints
-os.environ['CUDA_VISIBLE_DEVICES'] = ""
+#os.environ['CUDA_VISIBLE_DEVICES'] = ""
 
 import tensorflow as tf
 import numpy as np
@@ -45,7 +45,7 @@ adj_orig = adj # hard copy?
 adj_orig = adj_orig - sp.dia_matrix((adj_orig.diagonal()[np.newaxis, :], [0]), shape=adj_orig.shape)
 adj_orig.eliminate_zeros()
 
-adj_train, train_edges, val_edges, val_edges_false, test_edges, test_edges_false = mask_test_edges(adj)
+adj_train, train_edges, val_edges, val_edges_false, test_edges, test_edges_false = mask_test_edges(adj,test_percent=10., val_percent=5.)
 adj = adj_train
 
 if FLAGS.features == 0:
