@@ -48,7 +48,9 @@ class GCNModelAE(Model):
         self.input_dim = num_features
         self.features_nonzero = features_nonzero
         self.adj = placeholders['adj']
-        self.dropout = placeholders['dropout']
+        self.in_drop = placeholders['in_drop']
+        self.attn_drop = placeholders['attn_drop']
+        self.feat_drop = placeholders['feat_drop']
         self.attn = attn
         self.build()
 
@@ -59,14 +61,18 @@ class GCNModelAE(Model):
                                                 adj=self.adj,
                                                 features_nonzero=self.features_nonzero,
                                                 act=tf.nn.relu,
-                                                dropout=self.dropout,
+                                                in_drop=self.in_drop,
+                                                attn_drop=self.attn_drop,
+                                                feat_drop=self.feat_drop,
                                                 logging=self.logging)(self.inputs)
 
             self.embeddings = AttentiveGraphConvolution(input_dim=FLAGS.hidden1,
                                             output_dim=FLAGS.hidden2,
                                             adj=self.adj,
                                             act=lambda x: x,
-                                            dropout=self.dropout,
+                                            in_drop=self.in_drop,
+                                            attn_drop=self.attn_drop,
+                                            feat_drop=self.feat_drop,
                                             logging=self.logging)(self.hidden1)
         else:
             self.hidden1 = GraphConvolutionSparse(input_dim=self.input_dim,
@@ -74,14 +80,14 @@ class GCNModelAE(Model):
                                                 adj=self.adj,
                                                 features_nonzero=self.features_nonzero,
                                                 act=tf.nn.relu,
-                                                dropout=self.dropout,
+                                                dropout=self.in_drop,
                                                 logging=self.logging)(self.inputs)
 
             self.embeddings = GraphConvolution(input_dim=FLAGS.hidden1,
                                             output_dim=FLAGS.hidden2,
                                             adj=self.adj,
                                             act=lambda x: x,
-                                            dropout=self.dropout,
+                                            dropout=self.in_drop,
                                             logging=self.logging)(self.hidden1)
 
         self.z_mean = self.embeddings
@@ -100,7 +106,9 @@ class GCNModelVAE(Model):
         self.features_nonzero = features_nonzero
         self.n_samples = num_nodes
         self.adj = placeholders['adj']
-        self.dropout = placeholders['dropout']
+        self.in_drop = placeholders['in_drop']
+        self.attn_drop = placeholders['attn_drop']
+        self.feat_drop = placeholders['feat_drop']
         self.attn = attn
         self.build()
 
@@ -111,21 +119,27 @@ class GCNModelVAE(Model):
                                     adj=self.adj,
                                     features_nonzero=self.features_nonzero,
                                     act=tf.nn.relu,
-                                    dropout=self.dropout,
+                                    in_drop=self.in_drop,
+                                    attn_drop=self.attn_drop,
+                                    feat_drop=self.feat_drop,
                                     logging=self.logging)(self.inputs)
 
             self.z_mean = AttentiveGraphConvolution(input_dim=FLAGS.hidden1,
                                         output_dim=FLAGS.hidden2,
                                         adj=self.adj,
                                         act=lambda x: x,
-                                        dropout=self.dropout,
+                                        in_drop=self.in_drop,
+                                        attn_drop=self.attn_drop,
+                                        feat_drop=self.feat_drop,
                                         logging=self.logging)(self.hidden1)
 
             self.z_log_std = AttentiveGraphConvolution(input_dim=FLAGS.hidden1,
                                             output_dim=FLAGS.hidden2,
                                             adj=self.adj,
                                             act=lambda x: x,
-                                            dropout=self.dropout,
+                                            in_drop=self.in_drop,
+                                            attn_drop=self.attn_drop,
+                                            feat_drop=self.feat_drop,
                                             logging=self.logging)(self.hidden1)
         else:
             self.hidden1 = GraphConvolutionSparse(input_dim=self.input_dim,
@@ -133,21 +147,21 @@ class GCNModelVAE(Model):
                                                 adj=self.adj,
                                                 features_nonzero=self.features_nonzero,
                                                 act=tf.nn.relu,
-                                                dropout=self.dropout,
+                                                dropout=self.in_drop,
                                                 logging=self.logging)(self.inputs)
 
             self.z_mean = GraphConvolution(input_dim=FLAGS.hidden1,
                                         output_dim=FLAGS.hidden2,
                                         adj=self.adj,
                                         act=lambda x: x,
-                                        dropout=self.dropout,
+                                        dropout=self.in_drop,
                                         logging=self.logging)(self.hidden1)
 
             self.z_log_std = GraphConvolution(input_dim=FLAGS.hidden1,
                                             output_dim=FLAGS.hidden2,
                                             adj=self.adj,
                                             act=lambda x: x,
-                                            dropout=self.dropout,
+                                            dropout=self.in_drop,
                                             logging=self.logging)(self.hidden1)
 
         self.z = self.z_mean + tf.random_normal([self.n_samples, FLAGS.hidden2]) * tf.exp(self.z_log_std)

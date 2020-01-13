@@ -27,12 +27,17 @@ flags.DEFINE_integer('epochs', 200, 'Number of epochs to train.')
 flags.DEFINE_integer('hidden1', 32, 'Number of units in hidden layer 1.')
 flags.DEFINE_integer('hidden2', 16, 'Number of units in hidden layer 2.')
 flags.DEFINE_float('weight_decay', 0., 'Weight for L2 loss on embedding matrix.')
-flags.DEFINE_float('dropout', 0., 'Dropout rate (1 - keep probability).')
+flags.DEFINE_float('in_drop', 0., 'Input dropout rate (1 - keep probability).')
+flags.DEFINE_float('attn_drop', 0., 'Attention dropout rate (1 - keep probability).')
+flags.DEFINE_float('feat_drop', 0., 'Feature dropout rate (1 - keep probability).')
 
 flags.DEFINE_string('model', 'gcn_ae', 'Model string.')
 flags.DEFINE_string('dataset', 'cora', 'Dataset string.')
 flags.DEFINE_integer('features', 1, 'Whether to use features (1) or not (0).')
 flags.DEFINE_bool('attention',False, 'Whther to use attention.')
+
+flags.DEFINE_string('output_name','','Name of the output file to wirte results.')
+flags.DEFINE_integer('num_experiments',1,'Number of experiments to run')
 
 model_str = FLAGS.model
 dataset_str = FLAGS.dataset
@@ -65,7 +70,9 @@ placeholders = {
     'features': tf.sparse_placeholder(tf.float32),
     'adj': tf.sparse_placeholder(tf.float32),
     'adj_orig': tf.sparse_placeholder(tf.float32),
-    'dropout': tf.placeholder_with_default(0., shape=())
+    'in_drop': tf.placeholder_with_default(0., shape=()),
+    'attn_drop': tf.placeholder_with_default(0., shape=()),
+    'feat_drop': tf.placeholder_with_default(0., shape=())
 }
 
 num_nodes = adj.shape[0]
@@ -110,7 +117,9 @@ acc_val = []
 
 def get_roc_score(edges_pos, edges_neg, emb=None):
     if emb is None:
-        feed_dict.update({placeholders['dropout']: 0})
+        feed_dict.update({placeholders['in_drop']: 0})
+        feed_dict.update({placeholders['attn_drop']: 0})
+        feed_dict.update({placeholders['feat_drop']: 0})
         emb = sess.run(model.z_mean, feed_dict=feed_dict)
 
     def sigmoid(x):
@@ -145,30 +154,44 @@ val_roc_score = []
 adj_label = adj_train + sp.eye(adj_train.shape[0])
 adj_label = sparse_to_tuple(adj_label)
 
+sum_roc = 0
+sum_ap = 0
+for i in range(FLAGS.num_experiments):
 # Train model
-for epoch in range(FLAGS.epochs):
+    for epoch in range(FLAGS.epochs):
 
-    t = time.time()
-    # Construct feed dictionary
-    feed_dict = construct_feed_dict(adj_norm, adj_label, features, placeholders) # global variable
-    feed_dict.update({placeholders['dropout']: FLAGS.dropout})
-    # Run single weight update
-    outs = sess.run([opt.opt_op, opt.cost, opt.accuracy], feed_dict=feed_dict)
+        t = time.time()
+        # Construct feed dictionary
+        feed_dict = construct_feed_dict(adj_norm, adj_label, features, placeholders) # global variable
+        feed_dict.update({placeholders['in_drop']: FLAGS.in_drop})
+        feed_dict.update({placeholders['attn_drop']: FLAGS.attn_drop})
+        feed_dict.update({placeholders['feat_drop']: FLAGS.feat_drop})
+        # Run single weight update
+        outs = sess.run([opt.opt_op, opt.cost, opt.accuracy], feed_dict=feed_dict)
 
-    # Compute average loss
-    avg_cost = outs[1]
-    avg_accuracy = outs[2]
+        # Compute average loss
+        avg_cost = outs[1]
+        avg_accuracy = outs[2]
 
-    roc_curr, ap_curr = get_roc_score(val_edges, val_edges_false)
-    val_roc_score.append(roc_curr)
-    
-    print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(avg_cost),
-          "train_acc=", "{:.5f}".format(avg_accuracy), "val_roc=", "{:.5f}".format(val_roc_score[-1]),
-          "val_ap=", "{:.5f}".format(ap_curr),
-          "time=", "{:.5f}".format(time.time() - t))
+        roc_curr, ap_curr = get_roc_score(val_edges, val_edges_false)
+        val_roc_score.append(roc_curr)
+        
+        print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(avg_cost),
+            "train_acc=", "{:.5f}".format(avg_accuracy), "val_roc=", "{:.5f}".format(val_roc_score[-1]),
+            "val_ap=", "{:.5f}".format(ap_curr),
+            "time=", "{:.5f}".format(time.time() - t))
 
-print("Optimization Finished!")
+    print("Optimization Finished!")
 
-roc_score, ap_score = get_roc_score(test_edges, test_edges_false)
-print('Test ROC score: ' + str(roc_score))
-print('Test AP score: ' + str(ap_score))
+    roc_score, ap_score = get_roc_score(test_edges, test_edges_false)
+    sum_roc += roc_score
+    sum_ap += ap_score
+    print('Test ROC score: ' + str(roc_score))
+    print('Test AP score: ' + str(ap_score))
+
+ave_roc = sum_roc/FLAGS.num_experiments
+ave_ap = sum_ap/FLAGS.num_experiments
+print('average test ROC = {}\naverage test AP = {}\n\n'.format(str(ave_roc),str(ave_ap)))
+if FLAGS.output_name != '':
+    with open(FLAGS.output_name,'a') as f:
+        f.write('average test ROC = {}\naverage test AP = {}\n\n'.format(str(ave_roc),str(ave_ap)))

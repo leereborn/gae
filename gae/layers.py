@@ -83,28 +83,34 @@ class GraphConvolution(Layer):
         return outputs
 
 class AttentiveGraphConvolution(Layer):
-    def __init__(self, input_dim, output_dim, adj, dropout=0., act=tf.nn.relu, **kwargs):
+    def __init__(self, input_dim, output_dim, adj, in_drop=0., attn_drop=0., feat_drop=0., act=tf.nn.relu, **kwargs):
         super(AttentiveGraphConvolution, self).__init__(**kwargs)
         with tf.variable_scope(self.name + '_vars'):
             self.vars['weights'] = weight_variable_glorot(input_dim, output_dim, name="weights") # Why not use tf official glorot init?
-            #self.vars['attn_weights'] = weight_variable_glorot(output_dim, 1, name="attn_weights")
-            self.vars['attn_weights'] = tf.get_variable(name = "attn_weights", shape=(output_dim,1),initializer=tf.glorot_uniform_initializer)
-        self.dropout = dropout
+            self.vars['attn_self'] = tf.get_variable(name = "attn_self", shape=(output_dim,1),initializer=tf.glorot_uniform_initializer)
+            self.vars['attn_neigh'] = tf.get_variable(name = "attn_neigh", shape=(output_dim,1),initializer=tf.glorot_uniform_initializer)
+        self.in_drop = in_drop
+        self.attn_drop = attn_drop
+        self.feat_drop = feat_drop
         self.adj = adj
         self.act = act
 
     def _call(self, inputs):
         x = inputs
-        x = tf.nn.dropout(x, 1-self.dropout)
+        x = tf.nn.dropout(x, 1-self.in_drop)
         x = tf.matmul(x, self.vars['weights'])
         # attention
-        attn = tf.matmul(x, self.vars['attn_weights'])
-        attn_coef = attn + tf.transpose(attn) # ?
+        attn_self = tf.matmul(x, self.vars['attn_self'])
+        attn_neigh = tf.matmul(x,self.vars['attn_neigh'])
+        attn_coef = attn_self + tf.transpose(attn_neigh)
         attn_coef = tf.nn.leaky_relu(attn_coef)
         dense_adj = tf.sparse.to_dense(self.adj)
         mask = -10e9 * (1.0 - dense_adj)
         attn_coef += mask
         attn_coef = tf.nn.softmax(attn_coef)
+        # attn dropout
+        attn_coef = tf.nn.dropout(attn_coef,rate=self.attn_drop)
+        x = tf.nn.dropout(x,rate=self.feat_drop)
 
         x = tf.matmul(attn_coef, x)
         outputs = self.act(x)
@@ -131,13 +137,16 @@ class GraphConvolutionSparse(Layer):
         return outputs
 
 class AttentiveGraphConvolutionSparse(Layer):
-    def __init__(self, input_dim, output_dim, adj, features_nonzero, dropout=0., act=tf.nn.relu, **kwargs):
+    def __init__(self, input_dim, output_dim, adj, features_nonzero, in_drop=0., attn_drop=0., feat_drop=0., act=tf.nn.relu, **kwargs):
         super(AttentiveGraphConvolutionSparse, self).__init__(**kwargs)
         with tf.variable_scope(self.name + '_vars'):
             self.vars['weights'] = weight_variable_glorot(input_dim, output_dim, name="weights")
             #self.vars['attn_weights'] = weight_variable_glorot(output_dim, 1, name="attn_weights")
-            self.vars['attn_weights'] = tf.get_variable(name = "attn_weights", shape=(output_dim,1),initializer=tf.glorot_uniform_initializer)
-        self.dropout = dropout
+            self.vars['attn_self'] = tf.get_variable(name = "attn_self", shape=(output_dim,1),initializer=tf.glorot_uniform_initializer)
+            self.vars['attn_neigh'] = tf.get_variable(name = "attn_neigh", shape=(output_dim,1),initializer=tf.glorot_uniform_initializer)
+        self.in_drop = in_drop
+        self.attn_drop = attn_drop
+        self.feat_drop = feat_drop
         self.adj = adj
         self.act = act
         self.issparse = True # What is the purpose?
@@ -145,16 +154,20 @@ class AttentiveGraphConvolutionSparse(Layer):
 
     def _call(self, inputs):
         x = inputs
-        x = dropout_sparse(x, 1-self.dropout, self.features_nonzero)
+        x = dropout_sparse(x, 1-self.in_drop, self.features_nonzero)
         x = tf.sparse_tensor_dense_matmul(x, self.vars['weights']) # returns a dense matrix
         # attention
-        attn = tf.matmul(x, self.vars['attn_weights'])
-        attn_coef = attn + tf.transpose(attn) # ?
+        attn_self = tf.matmul(x, self.vars['attn_self'])
+        attn_neigh = tf.matmul(x,self.vars['attn_neigh'])
+        attn_coef = attn_self + tf.transpose(attn_neigh)
         attn_coef = tf.nn.leaky_relu(attn_coef)
         dense_adj = tf.sparse.to_dense(self.adj) # why need not reorder here but in gcmc
         mask = -10e9 * (1.0 - dense_adj)
         attn_coef += mask
         attn_coef = tf.nn.softmax(attn_coef)
+        # attn dropout
+        attn_coef = tf.nn.dropout(attn_coef,rate=self.attn_drop)
+        x = tf.nn.dropout(x,rate=self.feat_drop)
         
         x = tf.matmul(attn_coef, x)
         outputs = self.act(x)
