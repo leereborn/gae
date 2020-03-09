@@ -9,6 +9,7 @@ class OptimizerAE(object):
         preds_sub = preds
         labels_sub = labels
 
+        # loss function and cost function are same.
         self.cost = norm * tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(logits=preds_sub, targets=labels_sub, pos_weight=pos_weight))
         self.optimizer = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)  # Adam Optimizer
 
