@@ -56,6 +56,7 @@ class GCNModelAE(Model):
 
     def _build(self):
         if self.attn:
+            '''
             self.hidden1 = AttentiveGraphConvolutionSparse(input_dim=self.input_dim,
                                                 output_dim=FLAGS.hidden1,
                                                 adj=self.adj,
@@ -74,7 +75,19 @@ class GCNModelAE(Model):
                                             attn_drop=self.attn_drop,
                                             feat_drop=self.feat_drop,
                                             logging=self.logging)(self.hidden1)
+            '''
+            self.embeddings = AttentiveGraphConvolutionSparse(input_dim=self.input_dim,
+                                                output_dim=FLAGS.hidden1,
+                                                adj=self.adj,
+                                                features_nonzero=self.features_nonzero,
+                                                act=lambda x: x,
+                                                in_drop=self.in_drop,
+                                                attn_drop=self.attn_drop,
+                                                feat_drop=self.feat_drop,
+                                                logging=self.logging)(self.inputs)
+
         else:
+            
             self.hidden1 = GraphConvolutionSparse(input_dim=self.input_dim,
                                                 output_dim=FLAGS.hidden1,
                                                 adj=self.adj,
@@ -89,7 +102,16 @@ class GCNModelAE(Model):
                                             act=lambda x: x,
                                             dropout=self.in_drop,
                                             logging=self.logging)(self.hidden1)
-
+            '''
+            self.embeddings = GraphConvolutionSparse(input_dim=self.input_dim,
+                                                output_dim=FLAGS.hidden2,
+                                                adj=self.adj,
+                                                features_nonzero=self.features_nonzero,
+                                                act=lambda x: x,
+                                                dropout=self.in_drop,
+                                                logging=self.logging)(self.inputs)
+            '''
+        
         self.z_mean = self.embeddings
 
         self.reconstructions = InnerProductDecoder(input_dim=FLAGS.hidden2,

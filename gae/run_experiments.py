@@ -1,15 +1,16 @@
 import os
 from datetime import datetime
 
-out_file_name = '2019-01-10.txt'
-itr_times = 5
+out_file_name = '2019-03-25.txt'
+itr_times = 10
 data_set = 'cora'
 model = 'gcn_ae'
 num_itr = 200
 
 def grid_search():
-    input_drop = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+    input_drop = [0.4,0.7]
     attn_drop = [0.0]
+    #feat_drop = [0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8]
     feat_drop = [0.0]
 
     with open(out_file_name,'a') as f:
