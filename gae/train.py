@@ -92,6 +92,8 @@ for i in range(FLAGS.num_experiments):
     num_features = features[2][1]
     features_nonzero = features[1].shape[0]
 
+    sess = tf.Session()
+
     # Create model
     model = None
     if model_str == 'gcn_ae':
@@ -120,7 +122,7 @@ for i in range(FLAGS.num_experiments):
 
     merged_summary = tf.summary.merge_all()
     # Initialize session
-    with tf.Session() as sess:
+    with sess.as_default():
         sess.run(tf.global_variables_initializer())
 
         if FLAGS.write_summary:

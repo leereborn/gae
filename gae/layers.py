@@ -1,5 +1,7 @@
 from initializations import *
 import tensorflow as tf
+import sys
+import os
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -154,9 +156,7 @@ class AttentiveGraphConvolutionSparse(Layer):
             #self.vars['attn_weights'] = weight_variable_glorot(output_dim, 1, name="attn_weights")
             self.vars['attn_self'] = tf.get_variable(name = "attn_self", shape=(output_dim,1),initializer=tf.glorot_uniform_initializer)
             self.vars['attn_neigh'] = tf.get_variable(name = "attn_neigh", shape=(output_dim,1),initializer=tf.glorot_uniform_initializer)
-            self.vars['attn_coef'] = tf.get_variable(name = "attn_coef", shape=(input_dim,input_dim))
-            #print(self.vars['attn_self'])
-            #import pdb;pdb.set_trace()
+
         self.in_drop = in_drop
         self.attn_drop = attn_drop
         self.feat_drop = feat_drop
@@ -182,12 +182,13 @@ class AttentiveGraphConvolutionSparse(Layer):
         attn_coef = tf.nn.softmax(attn_coef)
         # attn dropout
         attn_coef = tf.nn.dropout(attn_coef,rate=self.attn_drop)
-        #print(attn_coef)
-        #import pdb;pdb.set_trace()
-        #tf.summary.histogram('hidden1_edge_weights',attn_coef)
-        x = tf.nn.dropout(x,rate=self.feat_drop)
-        
-        x = tf.matmul(attn_coef, x)
+        if os.path.exists("./attn_coef.out"):
+            os.remove("./attn_coef.out")
+        print_op = tf.print(attn_coef,output_stream="file://./attn_coef.out",summarize=-1,sep=',',end='\n\n')
+
+        with tf.control_dependencies([print_op]):
+            x = tf.nn.dropout(x,rate=self.feat_drop)
+            x = tf.matmul(attn_coef, x)
         #print(attn_coef)
         #import pdb;pdb.set_trace()
         outputs = self.act(x)
