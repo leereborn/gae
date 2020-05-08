@@ -17,6 +17,7 @@ def preprocess_graph(adj):
     rowsum = np.array(adj_.sum(1))
     degree_mat_inv_sqrt = sp.diags(np.power(rowsum, -0.5).flatten())
     adj_normalized = adj_.dot(degree_mat_inv_sqrt).transpose().dot(degree_mat_inv_sqrt).tocoo()
+    #sp.save_npz('adj_norm_sparse',adj_normalized)
     return sparse_to_tuple(adj_normalized)
 
 

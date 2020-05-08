@@ -71,7 +71,7 @@ for i in range(FLAGS.num_experiments):
         adj_norm = adj + sp.eye(adj.shape[0])
         adj_norm = sparse_to_tuple(adj_norm) # a tuple
     else:
-        adj_norm = preprocess_graph(adj)
+        adj_norm = preprocess_graph(adj) # a tuple
 
     #print(type(adj + sp.eye(adj.shape[0])))
     #import pdb;pdb.set_trace()
