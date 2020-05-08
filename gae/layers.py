@@ -184,7 +184,7 @@ class AttentiveGraphConvolutionSparse(Layer):
         attn_coef = tf.nn.dropout(attn_coef,rate=self.attn_drop)
         if os.path.exists("./attn_coef.out"):
             os.remove("./attn_coef.out")
-        print_op = tf.print(attn_coef,output_stream="file://./attn_coef.out",summarize=-1,sep=',',end='\n\n')
+        print_op = tf.print(attn_coef,output_stream="file://./attn_coef.out",summarize=-1,sep=',',end='\n')
 
         with tf.control_dependencies([print_op]):
             x = tf.nn.dropout(x,rate=self.feat_drop)
