@@ -45,6 +45,7 @@ flags.DEFINE_bool('multihead_attn',False,'Whether to use multi-headed attention.
 flags.DEFINE_integer('num_heads', 8, 'Number of attn heads.')
 flags.DEFINE_integer('head_dim', 8, 'attn head dimention.')
 flags.DEFINE_integer('num_heads_layer2', 4, 'Number of the attn heads in the second layer.')
+flags.DEFINE_bool('average_attn',False,'Whether to use average as attn ageragation.')
 
 flags.DEFINE_string('output_name','','Name of the output file to wirte results.')
 flags.DEFINE_integer('num_experiments',1,'Number of experiments to run')

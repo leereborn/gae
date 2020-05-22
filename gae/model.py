@@ -224,8 +224,10 @@ class MultiHeadedGAE(Model):
                                             attn_drop=self.attn_drop,
                                             feat_drop=self.feat_drop,
                                             logging=self.logging)(self.inputs))
-
-        self.hidden1 = tf.concat(attns,axis=1) 
+        if FLAGS.average_attn:
+            self.hidden1 = tf.add_n(attns) / FLAGS.num_heads
+        else:
+            self.hidden1 = tf.concat(attns,axis=1) 
 
         attns = []
         for _ in range(FLAGS.num_heads_layer2):
