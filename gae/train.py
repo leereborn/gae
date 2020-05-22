@@ -18,7 +18,7 @@ from sklearn.metrics import average_precision_score
 
 from optimizer import OptimizerAE, OptimizerVAE
 from input_data import load_data
-from model import GCNModelAE, GCNModelVAE
+from model import GCNModelAE, GCNModelVAE, MultiHeadedGAE
 from preprocessing import preprocess_graph, construct_feed_dict, sparse_to_tuple, mask_test_edges
 
 from statistics import mean, stdev
@@ -38,7 +38,13 @@ flags.DEFINE_float('feat_drop', 0., 'Feature dropout rate (1 - keep probability)
 flags.DEFINE_string('model', 'gcn_ae', 'Model string.')
 flags.DEFINE_string('dataset', 'cora', 'Dataset string.')
 flags.DEFINE_integer('features', 1, 'Whether to use features (1) or not (0).')
-flags.DEFINE_bool('attention',False, 'Whther to use attention.')
+flags.DEFINE_bool('attention',False, 'Whether to use attention.')
+flags.DEFINE_bool('bilinear',False, 'Whether to use bilinear decoder.')
+
+flags.DEFINE_bool('multihead_attn',False,'Whether to use multi-headed attention.')
+flags.DEFINE_integer('num_heads', 8, 'Number of attn heads.')
+flags.DEFINE_integer('head_dim', 8, 'attn head dimention.')
+flags.DEFINE_integer('num_heads_layer2', 4, 'Number of the attn heads in the second layer.')
 
 flags.DEFINE_string('output_name','','Name of the output file to wirte results.')
 flags.DEFINE_integer('num_experiments',1,'Number of experiments to run')
@@ -67,17 +73,17 @@ for i in range(FLAGS.num_experiments):
     # Some preprocessing
     #adj_norm = preprocess_graph(adj)
 
-    if FLAGS.attention:
+    if FLAGS.attention or FLAGS.multihead_attn:
         adj_norm = adj + sp.eye(adj.shape[0])
         adj_norm = sparse_to_tuple(adj_norm) # a tuple
     else:
-        adj_norm = preprocess_graph(adj) # a tuple
+        adj_norm = preprocess_graph(adj) # a tuple. Normalization. Identical matrix is added here.
 
     #print(type(adj + sp.eye(adj.shape[0])))
     #import pdb;pdb.set_trace()
 
-    # Define placeholders
-    placeholders = {
+    # Define placeholders 
+    placeholders = { # this is passed directly to the model to build the graph.
         'features': tf.sparse_placeholder(tf.float32),
         'adj': tf.sparse_placeholder(tf.float32),
         'adj_orig': tf.sparse_placeholder(tf.float32),
@@ -96,10 +102,13 @@ for i in range(FLAGS.num_experiments):
 
     # Create model
     model = None
-    if model_str == 'gcn_ae':
-        model = GCNModelAE(placeholders, num_features, features_nonzero, FLAGS.attention)
-    elif model_str == 'gcn_vae':
-        model = GCNModelVAE(placeholders, num_features, num_nodes, features_nonzero, FLAGS.attention)
+    if FLAGS.multihead_attn:
+        model = MultiHeadedGAE(placeholders, num_features, features_nonzero)
+    else:
+        if model_str == 'gcn_ae':
+            model = GCNModelAE(placeholders, num_features, features_nonzero, FLAGS.attention, FLAGS.bilinear)
+        elif model_str == 'gcn_vae':
+            model = GCNModelVAE(placeholders, num_features, num_nodes, features_nonzero, FLAGS.attention)
 
     pos_weight = float(adj.shape[0] * adj.shape[0] - adj.sum()) / adj.sum()
     norm = adj.shape[0] * adj.shape[0] / float((adj.shape[0] * adj.shape[0] - adj.sum()) * 2)
@@ -178,7 +187,7 @@ for i in range(FLAGS.num_experiments):
             t = time.time()
             # Construct feed dictionary
             feed_dict = construct_feed_dict(adj_norm, adj_label, features, placeholders) # global variable
-            feed_dict.update({placeholders['in_drop']: FLAGS.in_drop})
+            feed_dict.update({placeholders['in_drop']: FLAGS.in_drop}) # update is a methold of python dictionary
             feed_dict.update({placeholders['attn_drop']: FLAGS.attn_drop})
             feed_dict.update({placeholders['feat_drop']: FLAGS.feat_drop})
             # Run single weight update
@@ -207,13 +216,15 @@ for i in range(FLAGS.num_experiments):
         end = time.time()
         print("sec/epoch: "+str(epoch_time/FLAGS.epochs))
         print("Optimization Finished!")
-
+        
+        # Test
         roc_score, ap_score = get_roc_score(test_edges, test_edges_false)
         l_roc.append(roc_score)
         l_ap.append(ap_score)
         print('Test ROC score: ' + str(roc_score))
         print('Test AP score: ' + str(ap_score))
         '''
+        # why this didn't work before?
         var_attn_self = [v for v in tf.trainable_variables() if v.name == "gcnmodelae/attentivegraphconvolutionsparse_1_vars/attn_self:0"][0]
         var_attn_neigh = [v for v in tf.trainable_variables() if v.name == "gcnmodelae/attentivegraphconvolutionsparse_1_vars/attn_neigh:0"][0]
         attn_coef = var_attn_self + tf.transpose(var_attn_neigh)
@@ -224,8 +235,15 @@ for i in range(FLAGS.num_experiments):
         attn_coef = tf.nn.softmax(attn_coef)
         attn_coef_ndarr = sess.run(attn_coef)
         '''
-        #import pdb; pdb.set_trace()
-
+        # get embeddings
+        '''
+        feed_dict.update({placeholders['in_drop']: 0})
+        feed_dict.update({placeholders['attn_drop']: 0})
+        feed_dict.update({placeholders['feat_drop']: 0})
+        emb = sess.run(model.z_mean, feed_dict=feed_dict)
+        np.save('encoderout_nonparametric',emb)
+        '''
+        
 l_roc = list(map(lambda x: x*100, l_roc))
 l_ap = list(map(lambda x: x*100, l_ap))
 ave_roc = mean(l_roc)
@@ -233,8 +251,8 @@ ave_ap = mean(l_ap)
 if FLAGS.num_experiments>1:
     stdev_roc = stdev(l_roc)
     stdev_ap = stdev(l_ap)
-    print('stdev test ROC = {}\nstdev test AP = {}\n'.format(str(stdev_roc),str(stdev_ap)))
-print('average test ROC = {}\naverage test AP = {}'.format(str(ave_roc),str(ave_ap)))
+    print('\nstdev test ROC = {}\nstdev test AP = {}'.format(str(stdev_roc),str(stdev_ap)))
+    print('average test ROC = {}\naverage test AP = {}'.format(str(ave_roc),str(ave_ap)))
 if FLAGS.output_name != '':
     with open(FLAGS.output_name,'a') as f:
         f.write('average test ROC = {}\naverage test AP = {}\n'.format(str(ave_roc),str(ave_ap)))

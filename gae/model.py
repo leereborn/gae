@@ -1,4 +1,4 @@
-from layers import GraphConvolution, GraphConvolutionSparse, InnerProductDecoder, AttentiveGraphConvolution, AttentiveGraphConvolutionSparse
+from layers import GraphConvolution, GraphConvolutionSparse, InnerProductDecoder, AttentiveGraphConvolution, AttentiveGraphConvolutionSparse, BilinearDecoder
 import tensorflow as tf
 
 flags = tf.app.flags
@@ -41,7 +41,7 @@ class Model(object):
 
 
 class GCNModelAE(Model):
-    def __init__(self, placeholders, num_features, features_nonzero, attn, **kwargs):
+    def __init__(self, placeholders, num_features, features_nonzero, attn, bilinear, **kwargs):
         super(GCNModelAE, self).__init__(**kwargs)
 
         self.inputs = placeholders['features']
@@ -52,11 +52,12 @@ class GCNModelAE(Model):
         self.attn_drop = placeholders['attn_drop']
         self.feat_drop = placeholders['feat_drop']
         self.attn = attn
+        self.bilinear=bilinear
         self.build()
 
     def _build(self):
         if self.attn:
-            '''
+            
             self.hidden1 = AttentiveGraphConvolutionSparse(input_dim=self.input_dim,
                                                 output_dim=FLAGS.hidden1,
                                                 adj=self.adj,
@@ -77,7 +78,7 @@ class GCNModelAE(Model):
                                             logging=self.logging)(self.hidden1)
             '''
             self.embeddings = AttentiveGraphConvolutionSparse(input_dim=self.input_dim,
-                                                output_dim=FLAGS.hidden1,
+                                                output_dim=FLAGS.hidden2,
                                                 adj=self.adj,
                                                 features_nonzero=self.features_nonzero,
                                                 act=lambda x: x,
@@ -85,7 +86,7 @@ class GCNModelAE(Model):
                                                 attn_drop=self.attn_drop,
                                                 feat_drop=self.feat_drop,
                                                 logging=self.logging)(self.inputs)
-
+            '''
         else:
             
             self.hidden1 = GraphConvolutionSparse(input_dim=self.input_dim,
@@ -114,9 +115,15 @@ class GCNModelAE(Model):
         
         self.z_mean = self.embeddings
 
-        self.reconstructions = InnerProductDecoder(input_dim=FLAGS.hidden2,
+        if self.bilinear:
+            self.reconstructions = BilinearDecoder(input_dim=FLAGS.hidden2,
+                                    dropout=self.in_drop,
                                     act=lambda x: x,
                                     logging=self.logging)(self.embeddings)
+        else:
+            self.reconstructions = InnerProductDecoder(input_dim=FLAGS.hidden2,
+                                        act=lambda x: x,
+                                        logging=self.logging)(self.embeddings)
 
 
 class GCNModelVAE(Model):
@@ -191,3 +198,49 @@ class GCNModelVAE(Model):
         self.reconstructions = InnerProductDecoder(input_dim=FLAGS.hidden2,
                                     act=lambda x: x,
                                     logging=self.logging)(self.z)
+
+class MultiHeadedGAE(Model):
+    def __init__(self, placeholders, num_features, features_nonzero, **kwargs):
+        super(MultiHeadedGAE, self).__init__(**kwargs)
+
+        self.inputs = placeholders['features']
+        self.input_dim = num_features
+        self.features_nonzero = features_nonzero
+        self.adj = placeholders['adj']
+        self.in_drop = placeholders['in_drop']
+        self.attn_drop = placeholders['attn_drop']
+        self.feat_drop = placeholders['feat_drop']
+        self.build()
+
+    def _build(self):
+        attns = []
+        for _ in range(FLAGS.num_heads):
+            attns.append(AttentiveGraphConvolutionSparse(input_dim=self.input_dim,
+                                            output_dim=FLAGS.head_dim,
+                                            adj=self.adj,
+                                            features_nonzero=self.features_nonzero,
+                                            act=tf.nn.relu,
+                                            in_drop=self.in_drop,
+                                            attn_drop=self.attn_drop,
+                                            feat_drop=self.feat_drop,
+                                            logging=self.logging)(self.inputs))
+
+        self.hidden1 = tf.concat(attns,axis=1) 
+
+        attns = []
+        for _ in range(FLAGS.num_heads_layer2):
+            attns.append(AttentiveGraphConvolution(input_dim=FLAGS.num_heads * FLAGS.head_dim,
+                                        output_dim=FLAGS.hidden2,
+                                        adj=self.adj,
+                                        act=lambda x: x,
+                                        in_drop=self.in_drop,
+                                        attn_drop=self.attn_drop,
+                                        feat_drop=self.feat_drop,
+                                        logging=self.logging)(self.hidden1))
+        self.embeddings = tf.add_n(attns) / FLAGS.num_heads_layer2
+        
+        self.z_mean = self.embeddings
+
+        self.reconstructions = InnerProductDecoder(input_dim=FLAGS.hidden2,
+                                    act=lambda x: x,
+                                    logging=self.logging)(self.embeddings)

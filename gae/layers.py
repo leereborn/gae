@@ -63,6 +63,7 @@ class Layer(object):
     def __call__(self, inputs):
         with tf.name_scope(self.name):
             outputs = self._call(inputs)
+            #tf.summary.histogram(self.name + '/outputs', outputs)
             return outputs
 
     def _log_vars(self):
@@ -101,7 +102,7 @@ class AttentiveGraphConvolution(Layer):
         self.feat_drop = feat_drop
         self.adj = adj
         self.act = act
-
+        
         self._log_vars()
 
     def _call(self, inputs):
@@ -182,6 +183,7 @@ class AttentiveGraphConvolutionSparse(Layer):
         attn_coef = tf.nn.softmax(attn_coef)
         # attn dropout
         attn_coef = tf.nn.dropout(attn_coef,rate=self.attn_drop)
+        '''
         if os.path.exists("./attn_coef.out"):
             os.remove("./attn_coef.out")
         print_op = tf.print(attn_coef,output_stream="file://./attn_coef.out",summarize=-1,sep=',',end='\n')
@@ -189,9 +191,12 @@ class AttentiveGraphConvolutionSparse(Layer):
         with tf.control_dependencies([print_op]):
             x = tf.nn.dropout(x,rate=self.feat_drop)
             x = tf.matmul(attn_coef, x)
-        #print(attn_coef)
-        #import pdb;pdb.set_trace()
+        '''
+        x = tf.nn.dropout(x,rate=self.feat_drop)
+        x = tf.matmul(attn_coef, x)
         outputs = self.act(x)
+        #print(outputs)
+        #import pdb;pdb.set_trace()
         return outputs
 
 class InnerProductDecoder(Layer):
@@ -202,9 +207,33 @@ class InnerProductDecoder(Layer):
         self.act = act
 
     def _call(self, inputs):
-        inputs = tf.nn.dropout(inputs, 1-self.dropout)
+        inputs = tf.nn.dropout(inputs, rate=self.dropout)
         x = tf.transpose(inputs)
         x = tf.matmul(inputs, x)
         x = tf.reshape(x, [-1])
+        outputs = self.act(x)
+        return outputs
+
+class BilinearDecoder(Layer):
+    def __init__(self, input_dim, dropout=0., act=tf.nn.sigmoid, **kwargs):
+        super(BilinearDecoder, self).__init__(**kwargs)
+        self.dropout = dropout
+        self.act = act
+        self.diag = True
+        with tf.variable_scope(self.name + '_vars'):
+            if self.diag:
+                self.weight = tf.get_variable(name = "weight", shape=(input_dim,),initializer=tf.glorot_uniform_initializer)
+            else:
+                self.weight = tf.get_variable(name = "weight", shape=(input_dim,input_dim),initializer=tf.glorot_uniform_initializer)
+        tf.summary.histogram(self.name + '/vars/' + self.weight.name, self.weight)
+
+    def _call(self, inputs):
+        inputs = tf.nn.dropout(inputs, rate=self.dropout)
+        if self.diag:
+            x=tf.matmul(inputs, tf.linalg.tensor_diag(self.weight))
+        else:
+            x=tf.matmul(inputs, self.weight)
+        x=tf.matmul(x,tf.transpose(inputs))
+        x = tf.reshape(x, [-1]) # shape:(1,)
         outputs = self.act(x)
         return outputs
