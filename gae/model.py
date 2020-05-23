@@ -224,21 +224,32 @@ class MultiHeadedGAE(Model):
                                             attn_drop=self.attn_drop,
                                             feat_drop=self.feat_drop,
                                             logging=self.logging)(self.inputs))
+
         if FLAGS.average_attn:
             self.hidden1 = tf.add_n(attns) / FLAGS.num_heads
+            attns = []
+            for _ in range(FLAGS.num_heads_layer2):
+                attns.append(AttentiveGraphConvolution(input_dim=FLAGS.head_dim,
+                                            output_dim=FLAGS.hidden2,
+                                            adj=self.adj,
+                                            act=lambda x: x,
+                                            in_drop=self.in_drop,
+                                            attn_drop=self.attn_drop,
+                                            feat_drop=self.feat_drop,
+                                            logging=self.logging)(self.hidden1))
+            
         else:
-            self.hidden1 = tf.concat(attns,axis=1) 
-
-        attns = []
-        for _ in range(FLAGS.num_heads_layer2):
-            attns.append(AttentiveGraphConvolution(input_dim=FLAGS.num_heads * FLAGS.head_dim,
-                                        output_dim=FLAGS.hidden2,
-                                        adj=self.adj,
-                                        act=lambda x: x,
-                                        in_drop=self.in_drop,
-                                        attn_drop=self.attn_drop,
-                                        feat_drop=self.feat_drop,
-                                        logging=self.logging)(self.hidden1))
+            self.hidden1 = tf.concat(attns,axis=1)
+            attns = []
+            for _ in range(FLAGS.num_heads_layer2):
+                attns.append(AttentiveGraphConvolution(input_dim=FLAGS.num_heads * FLAGS.head_dim,
+                                            output_dim=FLAGS.hidden2,
+                                            adj=self.adj,
+                                            act=lambda x: x,
+                                            in_drop=self.in_drop,
+                                            attn_drop=self.attn_drop,
+                                            feat_drop=self.feat_drop,
+                                            logging=self.logging)(self.hidden1))
         self.embeddings = tf.add_n(attns) / FLAGS.num_heads_layer2
         
         self.z_mean = self.embeddings
