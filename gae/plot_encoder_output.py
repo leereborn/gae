@@ -7,6 +7,9 @@ from input_data import parse_index_file
 import collections
 import matplotlib.cm as cm
 import scipy.sparse as sp
+import sys
+from synthetic_data_generator import barabasi_albert_graph
+import networkx as nx
 
 def pca_decomp(arr):
     pca = PCA(n_components=2)
@@ -42,7 +45,9 @@ def plot_encoder_output(arr,labels):
     plt.show()
 
 if __name__ == "__main__":
-    labels, features = get_labels()
+    #labels, features = get_labels()
+    #np.set_printoptions(threshold=sys.maxsize)
+    #print(features[0])
     #input features plot
     '''
     features = PCA(n_components=50).fit_transform(features)
@@ -51,8 +56,20 @@ if __name__ == "__main__":
     '''
     # encoder output plot
     #filepath = 'encoder_output_parametric.npy'
+    '''
     filepath = 'encoderout_nonparametric.npy'
     arr = np.load(filepath,allow_pickle=True)
     print(arr.shape)
     arr_tSNE = tSNE(arr)
     plot_encoder_output(arr_tSNE,labels)
+    '''
+    G, attrs, labels = barabasi_albert_graph(1000,2,5,50,25,0.0)
+    attrs=attrs.toarray()
+    #arr_tSNE = tSNE(attrs)
+    arr_pca = pca_decomp(attrs)
+    #plot_encoder_output(arr_pca,labels)
+    pos = {}
+    for node in G.nodes:
+        pos[node] = arr_pca[node]
+    nx.draw(G,pos)
+    plt.show()

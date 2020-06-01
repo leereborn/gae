@@ -22,6 +22,7 @@ from model import GCNModelAE, GCNModelVAE, MultiHeadedGAE
 from preprocessing import preprocess_graph, construct_feed_dict, sparse_to_tuple, mask_test_edges
 
 from statistics import mean, stdev
+from synthetic_data_generator import get_synthetic_data
 
 # Settings
 flags = tf.app.flags
@@ -58,8 +59,16 @@ l_roc = []
 l_ap = []
 for i in range(FLAGS.num_experiments):
     # Load data
-    adj, features = load_data(dataset_str)
-
+    if dataset_str == 'synthetic':
+        adj, features = get_synthetic_data(3000,10,5,50,25,0.0)
+    else:
+        adj, features = load_data(dataset_str)
+    #dense_feat = features.toarray()
+    #sum_feat = np.sum(dense_feat,axis=1)
+    #ave = np.sum(sum_feat)/len(sum_feat)
+    #np.set_printoptions(threshold=sys.maxsize)
+    #print(ave) #18
+    #import pdb;pdb.set_trace()
     # Store original adjacency matrix (without diagonal entries) for later
     adj_orig = adj # hard copy?
     adj_orig = adj_orig - sp.dia_matrix((adj_orig.diagonal()[np.newaxis, :], [0]), shape=adj_orig.shape)
@@ -69,7 +78,7 @@ for i in range(FLAGS.num_experiments):
     adj = adj_train
 
     if FLAGS.features == 0:
-        features = sp.identity(features.shape[0])  # featureless
+        features = sp.identity(features.shape[0])  # featureless. sparse coo_matrix.
 
     # Some preprocessing
     #adj_norm = preprocess_graph(adj)

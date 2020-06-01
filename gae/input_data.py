@@ -55,6 +55,6 @@ def load_data(dataset):
 
     features = sp.vstack((allx, tx)).tolil()
     features[test_idx_reorder, :] = features[test_idx_range, :]
-    adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph))
+    adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph)) # scipy sparse matrix
 
     return adj, features
