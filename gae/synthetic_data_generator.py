@@ -4,6 +4,7 @@ import random as rd
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.sparse as sp
+import collections
 
 #count1 = 0
 #count2 = 0
@@ -33,6 +34,111 @@ def choose_targets(seq, m, label_dic, source_label):
             targets.add(x)
     return targets
 
+def choose_targets_random(existing_nodes, m, label_dic, source_label):
+    """ 
+    This differs from random.sample which can return repeated
+    elements if seq holds repeated elements.
+    """
+    #global count1
+    #global count2
+    targets = set()
+    if len(label_dic[source_label]) > m:
+        while len(targets) < m:
+            x = rd.choice(label_dic[source_label])
+            targets.add(x)
+    else:
+        targets.update(label_dic[source_label])
+        while len(targets) < m:
+            x = rd.choice(existing_nodes)
+            targets.add(x)
+    return targets
+
+def random_graph(n, m, num_labels, vocab_size, num_words, attr_noise):
+    if m < 1 or m >= n:
+        raise nx.NetworkXError("Random network must have m >= 1"
+                               " and m < n, m = %d, n = %d" % (m, n))
+    # init labels dic
+    label_dic = {}
+    attributes = []
+    for i in range(num_labels):
+        label_dic[i]=[]
+    # Add m initial nodes (m0 in barabasi-speak)
+    G = empty_graph(m) #Returns the empty graph with m nodes and zero edges
+    labels = []
+    for i in range(m):
+        l = rd.randint(0,num_labels-1)
+        label_dic[l].append(i)
+        attributes.append(get_attributes(l,num_labels,vocab_size,num_words,attr_noise))
+        labels.append(l)
+    # Target nodes for new edges
+    targets = list(range(m))
+    # List of existing nodes, with nodes repeated once for each adjacent edge
+    existing_nodes = [] # accurence in repeated_nodes represents node degree.
+    existing_nodes.extend(targets)
+    # Start adding the other n-m nodes. The first node is m.
+    source = m
+    l = rd.randint(0,num_labels-1)
+    while source < n:
+        labels.append(l)
+        label_dic[l].append(source)
+        attributes.append(get_attributes(l,num_labels,vocab_size,num_words,attr_noise))
+        # Add edges to m nodes from the source.
+        G.add_edges_from(zip([source] * m, targets))
+        
+        existing_nodes.append(source)
+        l = rd.randint(0,num_labels-1)
+        # Now choose m unique nodes from the existing nodes
+        # Pick uniformly from repeated_nodes (preferential attachment)
+        targets = choose_targets_random(existing_nodes, m, label_dic,l)
+        source += 1
+
+    attributes = np.array(attributes)
+    attributes = sp.coo_matrix(attributes)
+    print(attributes.shape)
+    return G, attributes, labels
+
+def caveman_small_world(p, community_num, community_size, vocab_size, num_words, attr_noise):
+    graph = nx.connected_caveman_graph(community_num, community_size)
+    attributes = []
+    count = 0
+    count2 = 0
+    p_remove = 0.5
+
+    for (u, v) in graph.edges():
+        if rd.random() < p_remove:
+            graph.remove_edge(u, v)
+            count2 += 1
+
+    for (u, v) in graph.edges():
+        if rd.random() < p:  # rewire the edge
+            x = rd.choice(list(graph.nodes))
+            if graph.has_edge(u, x):
+                continue
+            graph.remove_edge(u, v)
+            graph.add_edge(u, x)
+            count += 1
+    print('rewire:', count)
+    print('removed:',count2)
+
+    print(graph.number_of_nodes(),graph.number_of_edges())
+    #import pdb;pdb.set_trace()
+    for u in list(graph.nodes):
+        label = u//community_size
+        attributes.append(get_attributes(label,community_num,vocab_size,num_words,attr_noise))
+    attributes = np.array(attributes)
+    attributes = sp.coo_matrix(attributes)
+    return graph, attributes
+
+def pure_random_graph(num_nodes, num_edges, num_labels, vocab_size, num_words, attr_noise):
+    G = nx.dense_gnm_random_graph(num_nodes, num_edges)
+    attributes = []
+    for u in list(G.nodes):
+        label = rd.randint(0,num_labels-1)
+        attributes.append(get_attributes(label,num_labels,vocab_size,num_words,attr_noise))
+    attributes = np.array(attributes)
+    attributes = sp.coo_matrix(attributes)
+    return G, attributes
+
 def barabasi_albert_graph(n, m, num_labels, vocab_size, num_words, attr_noise):
     """Returns a random graph according to the Barabási–Albert preferential
     attachment model.
@@ -58,11 +164,6 @@ def barabasi_albert_graph(n, m, num_labels, vocab_size, num_words, attr_noise):
     ------
     NetworkXError
         If `m` does not satisfy ``1 <= m < n``.
-
-    References
-    ----------
-    .. [1] A. L. Barabási and R. Albert "Emergence of scaling in
-       random networks", Science 286, pp 509-512, 1999.
     """
     if m < 1 or m >= n:
         raise nx.NetworkXError("Barabási–Albert network must have m >= 1"
@@ -121,24 +222,44 @@ def get_attributes(label, num_labels, vocab_size, num_words, attr_noise):
             words[np.random.binomial(n-1,p,size=1)]=1. #if n then index out of bound exeception
     return words
 
-def get_synthetic_data(num_nodes, m, num_labels, vocab_size, num_words, attr_noise):
-    G, attrs,_ = barabasi_albert_graph(num_nodes, m, num_labels, vocab_size, num_words, attr_noise)
+def get_synthetic_data():
+    #G, attrs,_ = barabasi_albert_graph(3000,149,10,50,25,0.2)
+    #G, attrs,_ = random_graph(3000,10,5,50,25,0.2)
+    G, attrs = caveman_small_world(p=0.01, community_num=10, community_size=300, vocab_size=50, num_words=25, attr_noise=0.2)
+    #G, attrs = pure_random_graph(num_nodes=3000, num_edges=448500, num_labels=10, vocab_size=50, num_words=25, attr_noise=0.2)
     sparse_adj = nx.adjacency_matrix(G)
     return sparse_adj, attrs
+
+def draw_degree_distro(G):
+    degree_sequence = sorted([d for n, d in G.degree()], reverse=True)  # degree sequence
+    # print "Degree sequence", degree_sequence
+    degreeCount = collections.Counter(degree_sequence)
+    deg, cnt = zip(*degreeCount.items())
+
+    fig, ax = plt.subplots()
+    plt.bar(deg, cnt, width=0.9, color='b')
+
+    plt.title("Degree Histogram")
+    plt.ylabel("Count")
+    plt.xlabel("Degree")
+    ax.set_xticks([d + 0.4 for d in deg])
+    ax.set_xticklabels(deg)
+
+    plt.show()
 
 if __name__ == "__main__":
     '''
     link prediction tasks no need node labels!
     '''
-    G, attrs,_ = barabasi_albert_graph(100,2,5,50,25,0.0)
+    #G, attrs,_ = barabasi_albert_graph(200,5,10,50,25,0.0)
+    #G, attrs = pure_random_graph(num_nodes=200, num_edges=1000, num_labels=5, vocab_size=50, num_words=25, attr_noise=0.2)
+    #G, attrs = caveman_small_world(p=0.01, community_num=5, community_size=40, vocab_size=50, num_words=25, attr_noise=0.2)
     #print(count1,count2)
     #sparse_adj = nx.adjacency_matrix(G)
     #print(G.nodes())
     #G = nx.barabasi_albert_graph(100,5)
     #print(G.degree)
-    nx.draw(G)
-    #nx.draw_spring(G)
-    #nx.draw_circular(G)
-    #nx.draw_spectral(G)
+    #nx.draw_networkx(G,node_size=200)
+    draw_degree_distro(G)
     plt.show()
     #print(get_attributes(1, 6, 10, 5, 0.2))
