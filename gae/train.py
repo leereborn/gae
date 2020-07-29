@@ -14,15 +14,16 @@ import numpy as np
 import scipy.sparse as sp
 
 from sklearn.metrics import roc_auc_score
-from sklearn.metrics import average_precision_score
+from sklearn.metrics import average_precision_score, accuracy_score
 
 from optimizer import OptimizerAE, OptimizerVAE
 from input_data import load_data
 from model import GCNModelAE, GCNModelVAE, MultiHeadedGAE
 from preprocessing import preprocess_graph, construct_feed_dict, sparse_to_tuple, mask_test_edges
 
-from statistics import mean, stdev
+from statistics import mean, stdev, pstdev
 from synthetic_data_generator import get_synthetic_data
+import pickle
 
 # Settings
 flags = tf.app.flags
@@ -58,12 +59,15 @@ dataset_str = FLAGS.dataset
 
 l_roc = []
 l_ap = []
-
+l_acc = []
+p=0.01
+attrNoise = 0.2
+m=1
 if not FLAGS.fixed_split:
     for i in range(FLAGS.num_experiments):
         # Load data
         if dataset_str == 'synthetic':
-            adj, features = get_synthetic_data()
+            adj, features = get_synthetic_data(p=p, attrNoise=attrNoise)
         else:
             adj, features = load_data(dataset_str)
         #dense_feat = features.toarray()
@@ -171,23 +175,29 @@ if not FLAGS.fixed_split:
                 # Predict on test set of edges
                 adj_rec = np.dot(emb, emb.T)
                 preds = []
-                pos = []
+                #pos = []
                 for e in edges_pos:
                     preds.append(sigmoid(adj_rec[e[0], e[1]]))
-                    pos.append(adj_orig[e[0], e[1]])
+                    #pos.append(adj_orig[e[0], e[1]])
 
                 preds_neg = []
-                neg = []
+                #neg = []
                 for e in edges_neg:
                     preds_neg.append(sigmoid(adj_rec[e[0], e[1]]))
-                    neg.append(adj_orig[e[0], e[1]])
+                    #neg.append(adj_orig[e[0], e[1]])
 
-                preds_all = np.hstack([preds, preds_neg])
+                preds_all = np.hstack([preds, preds_neg]) #non-thresholded measure of decisions 
                 labels_all = np.hstack([np.ones(len(preds)), np.zeros(len(preds_neg))])
                 roc_score = roc_auc_score(labels_all, preds_all)
                 ap_score = average_precision_score(labels_all, preds_all)
-
-                return roc_score, ap_score
+                #print(preds_all)
+                #import pdb;pdb.set_trace()
+                #accuracy = accuracy_score(labels_all,preds_all)
+                correct_prediction = np.equal(np.greater_equal(preds_all, 0.5).astype(np.int32),labels_all.astype(np.int32))
+                accuracy = np.mean(correct_prediction.astype(np.float32))
+                #print(accuracy.shape)
+                #import pdb;pdb.set_trace()
+                return roc_score, ap_score, accuracy
 
 
             cost_val = []
@@ -223,7 +233,7 @@ if not FLAGS.fixed_split:
                 avg_cost = outs[1]
                 avg_accuracy = outs[2]
 
-                roc_curr, ap_curr = get_roc_score(val_edges, val_edges_false)
+                roc_curr, ap_curr,_ = get_roc_score(val_edges, val_edges_false)
                 val_roc_score.append(roc_curr)
                 
                 print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(avg_cost),
@@ -235,11 +245,13 @@ if not FLAGS.fixed_split:
             print("Optimization Finished!")
             
             # Test
-            roc_score, ap_score = get_roc_score(test_edges, test_edges_false)
+            roc_score, ap_score, accuracy_score = get_roc_score(test_edges, test_edges_false)
             l_roc.append(roc_score)
             l_ap.append(ap_score)
+            l_acc.append(accuracy_score)
             print('Test ROC score: ' + str(roc_score))
             print('Test AP score: ' + str(ap_score))
+            print('Test Acc score: ' + str(accuracy_score))
 
             # get embeddings
             '''
@@ -249,10 +261,11 @@ if not FLAGS.fixed_split:
             emb = sess.run(model.z_mean, feed_dict=feed_dict)
             np.save('encoderout_nonparametric',emb)
             '''
+        #attrNoise += 0.1
 else:
     # Load data
     if dataset_str == 'synthetic':
-        adj, features = get_synthetic_data(3000,10,5,50,25,0.0)
+        adj, features = get_synthetic_data()
     else:
         adj, features = load_data(dataset_str)
     #dense_feat = features.toarray()
@@ -361,23 +374,28 @@ else:
                 # Predict on test set of edges
                 adj_rec = np.dot(emb, emb.T)
                 preds = []
-                pos = []
+                #pos = []
                 for e in edges_pos:
                     preds.append(sigmoid(adj_rec[e[0], e[1]]))
-                    pos.append(adj_orig[e[0], e[1]])
+                    #pos.append(adj_orig[e[0], e[1]])
 
                 preds_neg = []
-                neg = []
+                #neg = []
                 for e in edges_neg:
                     preds_neg.append(sigmoid(adj_rec[e[0], e[1]]))
-                    neg.append(adj_orig[e[0], e[1]])
+                    #neg.append(adj_orig[e[0], e[1]])
 
-                preds_all = np.hstack([preds, preds_neg])
+                preds_all = np.hstack([preds, preds_neg]) #non-thresholded measure of decisions 
                 labels_all = np.hstack([np.ones(len(preds)), np.zeros(len(preds_neg))])
                 roc_score = roc_auc_score(labels_all, preds_all)
                 ap_score = average_precision_score(labels_all, preds_all)
-
-                return roc_score, ap_score
+                #print(preds_all)
+                #import pdb;pdb.set_trace()
+                #accuracy = accuracy_score(labels_all,preds_all)
+                correct_prediction = tf.equal(tf.cast(tf.greater_equal(tf.sigmoid(preds_all), 0.5), tf.int32),
+                                           tf.cast(labels_all, tf.int32))
+                accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+                return roc_score, ap_score, accuracy
 
 
             cost_val = []
@@ -413,7 +431,7 @@ else:
                 avg_cost = outs[1]
                 avg_accuracy = outs[2]
 
-                roc_curr, ap_curr = get_roc_score(val_edges, val_edges_false)
+                roc_curr, ap_curr,_ = get_roc_score(val_edges, val_edges_false)
                 val_roc_score.append(roc_curr)
                 
                 print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(avg_cost),
@@ -425,12 +443,14 @@ else:
             print("Optimization Finished!")
             
             # Test
-            roc_score, ap_score = get_roc_score(test_edges, test_edges_false)
+            roc_score, ap_score, accuracy_score = get_roc_score(test_edges, test_edges_false)
             l_roc.append(roc_score)
             l_ap.append(ap_score)
+            l_acc.append(accuracy_score)
             print('Test ROC score: ' + str(roc_score))
             print('Test AP score: ' + str(ap_score))
-
+            print('Test Acc score: ' + str(accuracy_score))
+            #import pdb;pdb.set_trace()
             # get embeddings
             '''
             feed_dict.update({placeholders['in_drop']: 0})
@@ -439,18 +459,27 @@ else:
             emb = sess.run(model.z_mean, feed_dict=feed_dict)
             np.save('encoderout_nonparametric',emb)
             '''
-        
-l_roc = list(map(lambda x: x*100, l_roc))
-l_ap = list(map(lambda x: x*100, l_ap))
-ave_roc = mean(l_roc)
-ave_ap = mean(l_ap)
+
 if FLAGS.num_experiments>1:
-    stdev_roc = stdev(l_roc)
-    stdev_ap = stdev(l_ap)
+    l_roc = list(map(lambda x: x*100, l_roc))
+    l_ap = list(map(lambda x: x*100, l_ap))
+    with open('AGAE_attr.pkl', 'wb') as f:
+        pickle.dump(l_acc,f)
+        pickle.dump(l_roc,f)
+        pickle.dump(l_ap,f)
+
+    ave_roc = mean(l_roc)
+    ave_ap = mean(l_ap)
+    ave_acc = mean(l_acc)
+    stdev_roc = pstdev(l_roc)
+    stdev_ap = pstdev(l_ap)
+    stdev_acc = np.std(l_acc)
     print('\nstdev test ROC = {}\nstdev test AP = {}'.format(str(stdev_roc),str(stdev_ap)))
     print('average test ROC = {}\naverage test AP = {}'.format(str(ave_roc),str(ave_ap)))
+    print('average test Acc = {}\nstdev test Acc = {}'.format(str(ave_acc),str(stdev_acc)))
 if FLAGS.output_name != '':
     with open(FLAGS.output_name,'a') as f:
         f.write('average test ROC = {}\naverage test AP = {}\n'.format(str(ave_roc),str(ave_ap)))
         if FLAGS.num_experiments>1:
             f.write('stdev test ROC = {}\nstdev test AP = {}\n\n'.format(str(stdev_roc),str(stdev_ap)))
+            f.write('average test Acc = {}\nstdev test Acc = {}'.format(str(ave_acc),str(stdev_acc)))
