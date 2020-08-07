@@ -219,10 +219,10 @@ def get_attributes(label, num_labels, vocab_size, num_words, attr_noise):
             words[np.random.binomial(n-1,p,size=1)]=1. #if n then index out of bound exeception
     return words
 
-def get_synthetic_data(p=0.01, attrNoise = 0.2):
-    G, attrs,_ = barabasi_albert_graph(3000,10,10,50,25,attrNoise)
+def get_synthetic_data(p=0.01, attrNoise = 0.2, m=10):
+    #G, attrs,_ = barabasi_albert_graph(3000,m,10,50,25,attrNoise)
     #G, attrs,_ = random_graph(3000,10,5,50,25,0.2)
-    #G, attrs = caveman_small_world(p=p, community_num=10, community_size=300, vocab_size=50, num_words=25, attr_noise=attrNoise)
+    G, attrs = caveman_small_world(p=p, community_num=10, community_size=300, vocab_size=50, num_words=25, attr_noise=attrNoise)
     #G, attrs = pure_random_graph(num_nodes=3000, num_edges=448500, num_labels=10, vocab_size=50, num_words=25, attr_noise=0.2)
     print(G.number_of_nodes(), G.number_of_edges())
     sparse_adj = nx.adjacency_matrix(G)
@@ -249,15 +249,15 @@ if __name__ == "__main__":
     '''
     link prediction tasks no need node labels!
     '''
-    G, attrs,_ = barabasi_albert_graph(500,10,10,50,25,0.0)
+    #G, attrs,_ = barabasi_albert_graph(500,100,10,50,25,0.0)
     #G, attrs = pure_random_graph(num_nodes=200, num_edges=1000, num_labels=5, vocab_size=50, num_words=25, attr_noise=0.2)
-    #G, attrs = caveman_small_world(p=0.01, community_num=10, community_size=20, vocab_size=50, num_words=25, attr_noise=0.2)
+    G, attrs = caveman_small_world(p=0.01, community_num=10, community_size=20, vocab_size=50, num_words=25, attr_noise=0.2)
     #print(count1,count2)
     #sparse_adj = nx.adjacency_matrix(G)
     #print(G.nodes())
     #G = nx.barabasi_albert_graph(100,5)
     #print(G.degree)
-    #nx.draw_networkx(G,with_labels = False, node_size=100)
-    draw_degree_distro(G)
+    nx.draw_networkx(G,with_labels = False, node_size=100)
+    #draw_degree_distro(G)
     plt.show()
     #print(get_attributes(1, 6, 10, 5, 0.2))
